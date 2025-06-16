@@ -39,18 +39,13 @@
 
       rows.forEach(row => {
         const cells = [...row.cells];
-        // A region-header row: single cell OR <td colspan=all>
-        if (
-          cells.length === 1 ||
-          (cells[0].hasAttribute('colspan') && cells.length === 1)
-        ) {
+        // A region-header row: has colspan attribute
+        if (cells[0] && cells[0].hasAttribute('colspan')) {
           const txt = cells[0].textContent.trim();
           const cell = cells[0];
           
-          // Check if this is a main region (blue background) or sub-region (lighter background)
-          const isMainRegion = cell.style.backgroundColor === 'rgb(66, 103, 177)' || 
-                               cell.style.backgroundColor === '#4267b1' ||
-                               txt.includes('(') && txt.includes(')');
+          // Check if this is a main region (has parentheses)
+          const isMainRegion = txt.includes('(') && txt.includes(')');
           
           if (isMainRegion) {
             // Main region header: "กรุงเทพมหานคร (BANGKOK)" -> "Bangkok"
@@ -82,6 +77,7 @@
         if (!regions[currentMainRegion]) regions[currentMainRegion] = [];
         regions[currentMainRegion].push(row.cloneNode(true));
       });
+
 
       /* ---------- build tabs ---------- */
       const style = makeEl('style');
