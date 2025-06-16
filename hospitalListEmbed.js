@@ -41,8 +41,16 @@
           (cells[0].hasAttribute('colspan') && cells.length === 1)
         ) {
           const txt = cells[0].textContent.trim();
-          const match = txt.match(/\(([^)]+)\)/); // words in parentheses
-          current = (match ? match[1] : txt).trim(); // e.g. "Central"
+          
+          // Try to extract English from parentheses first: "กรุงเทพมหานคร (BANGKOK)" -> "BANGKOK"
+          const parenthesesMatch = txt.match(/\(([^)]+)\)/);
+          if (parenthesesMatch) {
+            current = parenthesesMatch[1].trim();
+          } else {
+            // Try to extract English after slash: "นครปฐม/Nakornptrathom" -> "Nakornptrathom"
+            const slashMatch = txt.match(/\/(.+)$/);
+            current = slashMatch ? slashMatch[1].trim() : txt.trim();
+          }
           if (!regions[current]) regions[current] = [];
           return; // don’t keep the header row itself inside the region tab
         }
