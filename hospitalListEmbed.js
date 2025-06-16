@@ -1,6 +1,6 @@
 (function () {
   var containerId = 'hospital-list-container';
-  var src = 'hospital-list.html'; // update path if hosted elsewhere
+  var src = 'https://cdn.jsdelivr.net/gh/ahmedhadrich/PCIL_Scripts@main/hospital-list.html'; // update path if hosted elsewhere
 
   // Find or create the container
   var container = document.getElementById(containerId);
