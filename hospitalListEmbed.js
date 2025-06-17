@@ -6,7 +6,7 @@
 */
 (function () {
   const containerId = 'hospital-list-container';
-  const src = new URL('hospital-list.html', document.currentScript.src).href;
+  const src = new URL('hospitals.html', document.currentScript.src).href;
 
   /* ---------- helpers ---------- */
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
