@@ -32,55 +32,76 @@
       const rows = [...table.rows];
       const regions = {};           // { regionName: [<tr>, <tr>, …] }
       let currentMainRegion = null;
+      let headerRow = null;
 
       // Define the main region order to match Pacific Cross website
       const regionOrder = ['Bangkok', 'Suburban', 'Central', 'Eastern', 'Northern', 'Western', 'North Eastern', 'Southern'];
 
-      rows.forEach(row => {
+      rows.forEach((row, index) => {
         const cells = [...row.cells];
+        
         // Skip empty rows
         if (!cells.length) return;
         
-        // A region-header row: has colspan attribute or single cell spanning multiple columns
         const firstCell = cells[0];
-        if (firstCell && (firstCell.hasAttribute('colspan') || cells.length === 1)) {
-          const txt = firstCell.textContent.trim();
-          
-          // Skip if empty
-          if (!txt) return;
-          
-          // Check if this is a main region (has parentheses with English name)
-          const parenthesesMatch = txt.match(/\(([^)]+)\)/);
-          if (parenthesesMatch) {
-            let regionName = parenthesesMatch[1].trim();
-            
-            // Normalize region names to match website
-            const regionMap = {
-              'BANGKOK': 'Bangkok',
-              'SUBURBAN': 'Suburban', 
-              'CENTRAL': 'Central',
-              'EASTERN': 'Eastern',
-              'NORTHERN': 'Northern',
-              'WESTERN': 'Western',
-              'NORTH EASTERN': 'North Eastern',
-              'NORTHEASTERN': 'North Eastern',
-              'SOUTHERN': 'Southern'
-            };
-            
-            regionName = regionMap[regionName.toUpperCase()] || regionName;
-            currentMainRegion = regionName;
-            
-            // Initialize region array if it doesn't exist
-            if (!regions[currentMainRegion]) {
-              regions[currentMainRegion] = [];
-            }
-          }
-          // Skip header rows - don't add them to the regions
+        if (!firstCell) return;
+
+        // Check if this is a header row (first row with column headers)
+        if (index === 0 || firstCell.style.backgroundColor === '#0850a3' || 
+            (firstCell.textContent.includes('สถานพยาบาล') && firstCell.textContent.includes('Hospital Name'))) {
+          headerRow = row.cloneNode(true);
           return;
         }
-        
+
+        // Check if this is a main region header row
+        if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4) {
+          const txt = firstCell.textContent.trim();
+          
+          // Main region headers have specific background colors and patterns
+          if (firstCell.style.backgroundColor === '#4267b1' || txt.includes('(') && txt.includes(')')) {
+            // Extract English region name from parentheses
+            const parenthesesMatch = txt.match(/\(([^)]+)\)/);
+            if (parenthesesMatch) {
+              let regionName = parenthesesMatch[1].trim();
+              
+              // Normalize region names
+              const regionMap = {
+                'BANGKOK': 'Bangkok',
+                'Suburban': 'Suburban',
+                'Central': 'Central', 
+                'Eastern': 'Eastern',
+                'Northern': 'Northern',
+                'Western': 'Western',
+                'North Eastern': 'North Eastern',
+                'NORTH EASTERN': 'North Eastern',
+                'NORTHEASTERN': 'North Eastern',
+                'Southern': 'Southern'
+              };
+              
+              regionName = regionMap[regionName] || regionName;
+              currentMainRegion = regionName;
+              
+              // Initialize region array if it doesn't exist
+              if (!regions[currentMainRegion]) {
+                regions[currentMainRegion] = [];
+              }
+              
+              console.log('Found main region:', currentMainRegion, 'from text:', txt);
+            }
+          }
+          return; // Don't include header rows in the region data
+        }
+
+        // Check if this is a sub-region header (province header)
+        if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4 && 
+            firstCell.style.backgroundColor === '#8391c8') {
+          // This is a province/sub-region header, skip it
+          console.log('Skipping sub-region header:', firstCell.textContent.trim());
+          return;
+        }
+
         // Regular hospital row - add to current main region
-        if (currentMainRegion && firstCell && firstCell.textContent.trim()) {
+        if (currentMainRegion && firstCell.textContent.trim()) {
           if (!regions[currentMainRegion]) {
             regions[currentMainRegion] = [];
           }
@@ -90,7 +111,9 @@
 
       // Debug: Log regions found
       console.log('Regions found:', Object.keys(regions));
-      console.log('Region data:', regions);
+      console.log('Region counts:', Object.fromEntries(
+        Object.entries(regions).map(([key, val]) => [key, val.length])
+      ));
 
       /* ---------- build tabs ---------- */
       const style = makeEl('style');
@@ -147,28 +170,21 @@
         tabsBar.appendChild(btn);
 
         /* --- region-specific table --- */
-        const newTable = table.cloneNode(true);
-        newTable.classList.add('hospital-table');
-
-        // Clear the table body and add only the region's hospitals
-        const tbody = newTable.querySelector('tbody') || newTable;
+        const newTable = makeEl('table', 'hospital-table');
         
-        // Remove all existing rows except header
-        const headerRow = tbody.querySelector('tr');
-        tbody.innerHTML = '';
-        if (headerRow && headerRow.cells[0] && !headerRow.cells[0].hasAttribute('colspan')) {
-          tbody.appendChild(headerRow);
-        } else {
-          // Create a simple header if none exists
-          const header = makeEl('tr');
-          header.innerHTML = '<th>Hospital Name</th><th>Location</th><th>Contact</th>';
-          tbody.appendChild(header);
+        // Add header row if we have one
+        if (headerRow) {
+          const thead = makeEl('thead');
+          thead.appendChild(headerRow.cloneNode(true));
+          newTable.appendChild(thead);
         }
 
-        // Add region's hospital rows
+        // Add table body with region's hospitals
+        const tbody = makeEl('tbody');
         regions[region].forEach(row => {
           tbody.appendChild(row.cloneNode(true));
         });
+        newTable.appendChild(tbody);
 
         // Show/hide table based on if it's the first tab
         newTable.style.display = first ? 'block' : 'none';
