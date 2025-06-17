@@ -11,7 +11,7 @@
   const containerId = 'hospital-network-container';
 
   /* If the HTML file sits next to this JS on jsDelivr (recommended) */
-  const htmlSrc = new URL('hospital-network-tabs.html', document.currentScript.src).href;
+  const htmlSrc = new URL('hospitals.html', document.currentScript.src).href;
 
   /*** 2. Find (or create) the container ***/
   let host = document.getElementById(containerId);
