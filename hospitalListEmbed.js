@@ -24,122 +24,195 @@
     .then(html => {
       container.innerHTML = html;
 
-      /* ---------- find the original table ---------- */
-      const table = container.querySelector('table');
-      if (!table) return;
+      /* ---------- find all tables ---------- */
+      const tables = container.querySelectorAll('table');
+      if (!tables.length) {
+        console.error('No tables found');
+        return;
+      }
 
-      /* ---------- split rows into regions ---------- */
-      const rows = [...table.rows];
-      const regions = {};           // { regionName: [<tr>, <tr>, …] }
-      let currentMainRegion = null;
+      console.log('Found', tables.length, 'tables');
+
+      // Process each table separately since they're already grouped by region
+      const regions = {};
       let headerRow = null;
 
-      // Define the main region order to match Pacific Cross website
-      const regionOrder = ['Bangkok', 'Suburban', 'Central', 'Eastern', 'Northern', 'Western', 'North Eastern', 'Southern'];
-
-      rows.forEach((row, index) => {
-        const cells = [...row.cells];
+      tables.forEach((table, tableIndex) => {
+        const rows = [...table.rows];
+        console.log(`Processing table ${tableIndex + 1} with ${rows.length} rows`);
         
-        // Skip empty rows
-        if (!cells.length) return;
+        let currentRegion = null;
         
-        const firstCell = cells[0];
-        if (!firstCell) return;
-
-        // Check if this is a header row (first row with column headers)
-        if (index === 0 || firstCell.style.backgroundColor === '#0850a3' || 
-            (firstCell.textContent.includes('สถานพยาบาล') && firstCell.textContent.includes('Hospital Name'))) {
-          headerRow = row.cloneNode(true);
-          return;
-        }
-
-        // Check if this is a main region header row
-        if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4) {
-          const txt = firstCell.textContent.trim();
+        rows.forEach((row, rowIndex) => {
+          const cells = [...row.cells];
+          if (!cells.length) return;
           
-          // Main region headers have specific background colors and patterns
-          if (firstCell.style.backgroundColor === '#4267b1' || txt.includes('(') && txt.includes(')')) {
-            // Extract English region name from parentheses
-            const parenthesesMatch = txt.match(/\(([^)]+)\)/);
-            if (parenthesesMatch) {
-              let regionName = parenthesesMatch[1].trim();
-              
-              // Normalize region names
-              const regionMap = {
-                'BANGKOK': 'Bangkok',
-                'Suburban': 'Suburban',
-                'Central': 'Central', 
-                'Eastern': 'Eastern',
-                'Northern': 'Northern',
-                'Western': 'Western',
-                'North Eastern': 'North Eastern',
-                'NORTH EASTERN': 'North Eastern',
-                'NORTHEASTERN': 'North Eastern',
-                'Southern': 'Southern'
-              };
-              
-              regionName = regionMap[regionName] || regionName;
-              currentMainRegion = regionName;
-              
-              // Initialize region array if it doesn't exist
-              if (!regions[currentMainRegion]) {
-                regions[currentMainRegion] = [];
-              }
-              
-              console.log('Found main region:', currentMainRegion, 'from text:', txt);
+          const firstCell = cells[0];
+          if (!firstCell) return;
+
+          // Capture header row from first table
+          if (!headerRow && (rowIndex === 0 || 
+              (firstCell.style.backgroundColor === '#0850a3') ||
+              firstCell.textContent.includes('สถานพยาบาล'))) {
+            headerRow = row.cloneNode(true);
+            console.log('Header row captured');
+            return;
+          }
+
+          // Check for main region header
+          if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4) {
+            const txt = firstCell.textContent.trim();
+            console.log('Checking potential region header:', txt);
+            
+            // Look for region headers with specific patterns
+            if (txt.includes('กรุงเทพมหานคร') && txt.includes('BANGKOK')) {
+              currentRegion = 'Bangkok';
+            } else if (txt.includes('ปริมณฑล') && txt.includes('Suburban')) {
+              currentRegion = 'Suburban';
+            } else if (txt.includes('ภาคกลาง') && txt.includes('Central')) {
+              currentRegion = 'Central';
+            } else if (txt.includes('ภาคตะวันออก') && txt.includes('Eastern')) {
+              currentRegion = 'Eastern';
+            } else if (txt.includes('ภาคเหนือ') && txt.includes('Northern')) {
+              currentRegion = 'Northern';
+            } else if (txt.includes('ภาคตะวันตก') && txt.includes('Western')) {
+              currentRegion = 'Western';
+            } else if (txt.includes('ภาคตะวันออกเฉียงเหนือ') && txt.includes('North Eastern')) {
+              currentRegion = 'North Eastern';
+            } else if (txt.includes('ภาคใต้') && txt.includes('Southern')) {
+              currentRegion = 'Southern';
             }
+            
+            if (currentRegion) {
+              console.log('Found region:', currentRegion);
+              if (!regions[currentRegion]) {
+                regions[currentRegion] = [];
+              }
+            }
+            return; // Skip header rows
           }
-          return; // Don't include header rows in the region data
-        }
 
-        // Check if this is a sub-region header (province header)
-        if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4 && 
-            firstCell.style.backgroundColor === '#8391c8') {
-          // This is a province/sub-region header, skip it
-          console.log('Skipping sub-region header:', firstCell.textContent.trim());
-          return;
-        }
-
-        // Regular hospital row - add to current main region
-        if (currentMainRegion && firstCell.textContent.trim()) {
-          if (!regions[currentMainRegion]) {
-            regions[currentMainRegion] = [];
+          // Skip sub-region headers (province headers)
+          if (firstCell.hasAttribute('colspan') && firstCell.colSpan >= 4 && 
+              (firstCell.style.backgroundColor === '#8391c8' || 
+               firstCell.style.fontWeight === 'bold')) {
+            console.log('Skipping sub-region header:', firstCell.textContent.trim());
+            return;
           }
-          regions[currentMainRegion].push(row.cloneNode(true));
-        }
+
+          // Regular hospital row
+          if (currentRegion && firstCell.textContent.trim() && 
+              !firstCell.hasAttribute('colspan')) {
+            if (!regions[currentRegion]) {
+              regions[currentRegion] = [];
+            }
+            regions[currentRegion].push(row.cloneNode(true));
+          }
+        });
       });
 
       // Debug: Log regions found
-      console.log('Regions found:', Object.keys(regions));
-      console.log('Region counts:', Object.fromEntries(
-        Object.entries(regions).map(([key, val]) => [key, val.length])
-      ));
+      console.log('Final regions found:', Object.keys(regions));
+      Object.entries(regions).forEach(([region, hospitals]) => {
+        console.log(`${region}: ${hospitals.length} hospitals`);
+      });
+
+      if (Object.keys(regions).length === 0) {
+        console.error('No regions were detected. Check the HTML structure.');
+        container.innerHTML = '<p style="color:red">Error: Could not parse hospital regions. Please check the data format.</p>';
+        return;
+      }
 
       /* ---------- build tabs ---------- */
       const style = makeEl('style');
       style.textContent = `
-        .hospital-tabs      {display:flex;flex-wrap:wrap;gap:0;margin-bottom:1rem;border-bottom:1px solid #ddd}
-        .hospital-tab       {border:none;background:#f8f9fa;cursor:pointer;padding:12px 20px;
-                             font:inherit;border:1px solid #ddd;border-bottom:none;
-                             margin-right:2px;color:#495057;font-weight:500}
-        .hospital-tab:hover {background:#e9ecef;color:#212529}
-        .hospital-tab.active{background:#fff;color:#0056b3;font-weight:600;border-bottom:1px solid #fff;
-                             margin-bottom:-1px;position:relative}
-        .hospital-table     {width:100%;border-collapse:collapse;margin-bottom:1.5rem;
-                             font-size:14px;table-layout:fixed}
-        .hospital-table thead th {background:#f8f9fa;font-weight:600;color:#495057;
-                                  border:1px solid #ddd;padding:12px 10px;text-align:left}
-        .hospital-table tbody td {border:1px solid #ddd;padding:10px;vertical-align:top}
-        .hospital-table tbody tr:nth-child(even) {background:#f8f9fa}
-        .hospital-table tbody tr:hover {background:#e9ecef}
-        .hospital-table a {color:#0056b3;text-decoration:none}
-        .hospital-table a:hover {text-decoration:underline}
+        .hospital-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0;
+          margin-bottom: 1rem;
+          border-bottom: 1px solid #ddd;
+          background: #fff;
+        }
+        .hospital-tab {
+          border: none;
+          background: #f8f9fa;
+          cursor: pointer;
+          padding: 12px 20px;
+          font-family: inherit;
+          font-size: 14px;
+          border: 1px solid #ddd;
+          border-bottom: none;
+          margin-right: 2px;
+          color: #495057;
+          font-weight: 500;
+          transition: all 0.2s ease;
+        }
+        .hospital-tab:hover {
+          background: #e9ecef;
+          color: #212529;
+        }
+        .hospital-tab.active {
+          background: #fff;
+          color: #0056b3;
+          font-weight: 600;
+          border-bottom: 1px solid #fff;
+          margin-bottom: -1px;
+          position: relative;
+          z-index: 1;
+        }
+        .hospital-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 1.5rem;
+          font-size: 14px;
+          background: #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .hospital-table thead th {
+          background: #0850a3;
+          color: #fff;
+          font-weight: 600;
+          border: 1px solid #ddd;
+          padding: 12px 10px;
+          text-align: center;
+        }
+        .hospital-table tbody td {
+          border: 1px solid #ddd;
+          padding: 10px;
+          vertical-align: top;
+        }
+        .hospital-table tbody tr:nth-child(even) {
+          background: #f8f9fa;
+        }
+        .hospital-table tbody tr:hover {
+          background: #e9ecef;
+        }
+        .hospital-table a {
+          color: #0056b3;
+          text-decoration: none;
+        }
+        .hospital-table a:hover {
+          text-decoration: underline;
+        }
         
         @media only screen and (max-width: 768px) {
-          .hospital-tabs {flex-direction:column;gap:0}
-          .hospital-tab {margin-right:0;margin-bottom:2px;padding:10px 15px}
-          .hospital-table {font-size:12px}
-          .hospital-table th, .hospital-table td {padding:8px 5px}
+          .hospital-tabs {
+            flex-direction: column;
+            gap: 0;
+          }
+          .hospital-tab {
+            margin-right: 0;
+            margin-bottom: 2px;
+            padding: 10px 15px;
+            font-size: 13px;
+          }
+          .hospital-table {
+            font-size: 12px;
+          }
+          .hospital-table th, .hospital-table td {
+            padding: 8px 5px;
+          }
         }
       `;
       document.head.appendChild(style);
@@ -147,32 +220,35 @@
       const tabsBar = makeEl('div', 'hospital-tabs');
       const tablesWrap = makeEl('div');
 
+      // Define the order of regions
+      const regionOrder = ['Bangkok', 'Suburban', 'Central', 'Eastern', 'Northern', 'Western', 'North Eastern', 'Southern'];
+      
       // Get regions that actually have data, in the correct order
       const orderedRegions = regionOrder.filter(region => 
         regions[region] && regions[region].length > 0
       );
-      
-      // If no regions found in the preferred order, use all available regions
-      if (orderedRegions.length === 0) {
-        orderedRegions.push(...Object.keys(regions).filter(region => 
-          regions[region] && regions[region].length > 0
-        ));
-      }
 
-      console.log('Ordered regions to display:', orderedRegions);
+      console.log('Creating tabs for regions:', orderedRegions);
+
+      if (orderedRegions.length === 0) {
+        console.error('No valid regions with data found');
+        container.innerHTML = '<p style="color:red">No hospital data found. Please check the source file.</p>';
+        return;
+      }
 
       let first = true;
       orderedRegions.forEach(region => {
         /* --- tab button --- */
         const btn = makeEl('button', 'hospital-tab');
         btn.textContent = region;
+        btn.type = 'button'; // Explicitly set button type
         if (first) btn.classList.add('active');
         tabsBar.appendChild(btn);
 
         /* --- region-specific table --- */
         const newTable = makeEl('table', 'hospital-table');
         
-        // Add header row if we have one
+        // Add header row
         if (headerRow) {
           const thead = makeEl('thead');
           thead.appendChild(headerRow.cloneNode(true));
@@ -191,7 +267,10 @@
         tablesWrap.appendChild(newTable);
 
         /* --- tab click handler --- */
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('Tab clicked:', region);
+          
           // Remove active class from all tabs
           tabsBar.querySelectorAll('.hospital-tab').forEach(b => 
             b.classList.remove('active')
@@ -203,6 +282,8 @@
           // Activate clicked tab and show its table
           btn.classList.add('active');
           newTable.style.display = 'block';
+          
+          console.log('Switched to region:', region, 'with', regions[region].length, 'hospitals');
         });
 
         first = false;
@@ -213,13 +294,12 @@
       container.appendChild(tabsBar);
       container.appendChild(tablesWrap);
 
-      // Log final state for debugging
+      console.log('Hospital tabs initialized successfully');
       console.log('Tabs created:', tabsBar.children.length);
       console.log('Tables created:', tablesWrap.children.length);
     })
     .catch(err => {
       console.error('Unable to load hospital list:', err);
-      container.innerHTML =
-        '<p style="color:red">Unable to load hospital list. Please try again later.</p>';
+      container.innerHTML = '<p style="color:red">Unable to load hospital list. Please try again later.</p>';
     });
 })();
