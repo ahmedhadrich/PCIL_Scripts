@@ -31,53 +31,66 @@
       /* ---------- split rows into regions ---------- */
       const rows = [...table.rows];
       const regions = {};           // { regionName: [<tr>, <tr>, …] }
-      let currentMainRegion = 'All';
-      let currentSubRegion = null;
+      let currentMainRegion = null;
 
       // Define the main region order to match Pacific Cross website
       const regionOrder = ['Bangkok', 'Suburban', 'Central', 'Eastern', 'Northern', 'Western', 'North Eastern', 'Southern'];
 
       rows.forEach(row => {
         const cells = [...row.cells];
-        // A region-header row: has colspan attribute
-        if (cells[0] && cells[0].hasAttribute('colspan')) {
-          const txt = cells[0].textContent.trim();
-          const cell = cells[0];
+        // Skip empty rows
+        if (!cells.length) return;
+        
+        // A region-header row: has colspan attribute or single cell spanning multiple columns
+        const firstCell = cells[0];
+        if (firstCell && (firstCell.hasAttribute('colspan') || cells.length === 1)) {
+          const txt = firstCell.textContent.trim();
           
-          // Check if this is a main region (has parentheses)
-          const isMainRegion = txt.includes('(') && txt.includes(')');
+          // Skip if empty
+          if (!txt) return;
           
-          if (isMainRegion) {
-            // Main region header: "กรุงเทพมหานคร (BANGKOK)" -> "Bangkok"
-            const parenthesesMatch = txt.match(/\(([^)]+)\)/);
-            if (parenthesesMatch) {
-              let regionName = parenthesesMatch[1].trim();
-              // Normalize region names to match website
-              if (regionName === 'BANGKOK') regionName = 'Bangkok';
-              else if (regionName === 'Suburban') regionName = 'Suburban';
-              else if (regionName === 'Central') regionName = 'Central';
-              else if (regionName === 'Eastern') regionName = 'Eastern';
-              else if (regionName === 'Northern') regionName = 'Northern';
-              else if (regionName === 'Western') regionName = 'Western';
-              else if (regionName === 'North Eastern') regionName = 'North Eastern';
-              else if (regionName === 'Southern') regionName = 'Southern';
-              
-              currentMainRegion = regionName;
-              currentSubRegion = null;
-              if (!regions[currentMainRegion]) regions[currentMainRegion] = [];
+          // Check if this is a main region (has parentheses with English name)
+          const parenthesesMatch = txt.match(/\(([^)]+)\)/);
+          if (parenthesesMatch) {
+            let regionName = parenthesesMatch[1].trim();
+            
+            // Normalize region names to match website
+            const regionMap = {
+              'BANGKOK': 'Bangkok',
+              'SUBURBAN': 'Suburban', 
+              'CENTRAL': 'Central',
+              'EASTERN': 'Eastern',
+              'NORTHERN': 'Northern',
+              'WESTERN': 'Western',
+              'NORTH EASTERN': 'North Eastern',
+              'NORTHEASTERN': 'North Eastern',
+              'SOUTHERN': 'Southern'
+            };
+            
+            regionName = regionMap[regionName.toUpperCase()] || regionName;
+            currentMainRegion = regionName;
+            
+            // Initialize region array if it doesn't exist
+            if (!regions[currentMainRegion]) {
+              regions[currentMainRegion] = [];
             }
-          } else {
-            // Sub-region header: "นครปฐม/Nakornptrathom" -> add to current main region
-            currentSubRegion = txt;
-            // Don't change the main region, sub-regions belong to the current main region
           }
-          return; // don’t keep the header row itself inside the region tab
+          // Skip header rows - don't add them to the regions
+          return;
         }
+        
         // Regular hospital row - add to current main region
-        if (!regions[currentMainRegion]) regions[currentMainRegion] = [];
-        regions[currentMainRegion].push(row.cloneNode(true));
+        if (currentMainRegion && firstCell && firstCell.textContent.trim()) {
+          if (!regions[currentMainRegion]) {
+            regions[currentMainRegion] = [];
+          }
+          regions[currentMainRegion].push(row.cloneNode(true));
+        }
       });
 
+      // Debug: Log regions found
+      console.log('Regions found:', Object.keys(regions));
+      console.log('Region data:', regions);
 
       /* ---------- build tabs ---------- */
       const style = makeEl('style');
@@ -111,9 +124,20 @@
       const tabsBar = makeEl('div', 'hospital-tabs');
       const tablesWrap = makeEl('div');
 
-      // Ensure tabs are created in the correct order
-      const orderedRegions = regionOrder.filter(region => regions[region] && regions[region].length > 0);
+      // Get regions that actually have data, in the correct order
+      const orderedRegions = regionOrder.filter(region => 
+        regions[region] && regions[region].length > 0
+      );
       
+      // If no regions found in the preferred order, use all available regions
+      if (orderedRegions.length === 0) {
+        orderedRegions.push(...Object.keys(regions).filter(region => 
+          regions[region] && regions[region].length > 0
+        ));
+      }
+
+      console.log('Ordered regions to display:', orderedRegions);
+
       let first = true;
       orderedRegions.forEach(region => {
         /* --- tab button --- */
@@ -126,24 +150,43 @@
         const newTable = table.cloneNode(true);
         newTable.classList.add('hospital-table');
 
-        // keep only the header row, then inject region rows
-        const body = newTable.tBodies[0] || newTable; // fall back if no <tbody>
-        [...body.rows].forEach((r, i) => i && r.remove());
-        regions[region].forEach(r => body.appendChild(r));
-
-        if (first) {
-          newTable.style.display = '';
+        // Clear the table body and add only the region's hospitals
+        const tbody = newTable.querySelector('tbody') || newTable;
+        
+        // Remove all existing rows except header
+        const headerRow = tbody.querySelector('tr');
+        tbody.innerHTML = '';
+        if (headerRow && headerRow.cells[0] && !headerRow.cells[0].hasAttribute('colspan')) {
+          tbody.appendChild(headerRow);
         } else {
-          newTable.style.display = 'none';
+          // Create a simple header if none exists
+          const header = makeEl('tr');
+          header.innerHTML = '<th>Hospital Name</th><th>Location</th><th>Contact</th>';
+          tbody.appendChild(header);
         }
+
+        // Add region's hospital rows
+        regions[region].forEach(row => {
+          tbody.appendChild(row.cloneNode(true));
+        });
+
+        // Show/hide table based on if it's the first tab
+        newTable.style.display = first ? 'block' : 'none';
         tablesWrap.appendChild(newTable);
 
         /* --- tab click handler --- */
         btn.addEventListener('click', () => {
-          tabsBar.querySelectorAll('.hospital-tab').forEach(b => b.classList.remove('active'));
-          tablesWrap.querySelectorAll('.hospital-table').forEach(t => (t.style.display = 'none'));
+          // Remove active class from all tabs
+          tabsBar.querySelectorAll('.hospital-tab').forEach(b => 
+            b.classList.remove('active')
+          );
+          // Hide all tables
+          tablesWrap.querySelectorAll('.hospital-table').forEach(t => 
+            t.style.display = 'none'
+          );
+          // Activate clicked tab and show its table
           btn.classList.add('active');
-          newTable.style.display = '';
+          newTable.style.display = 'block';
         });
 
         first = false;
@@ -153,6 +196,10 @@
       container.innerHTML = ''; // clear original markup
       container.appendChild(tabsBar);
       container.appendChild(tablesWrap);
+
+      // Log final state for debugging
+      console.log('Tabs created:', tabsBar.children.length);
+      console.log('Tables created:', tablesWrap.children.length);
     })
     .catch(err => {
       console.error('Unable to load hospital list:', err);
