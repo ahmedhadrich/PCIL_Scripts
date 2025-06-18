@@ -1,19 +1,17 @@
-/*  hospitalNetworkEmbed.js
+/*  hospitalListEmbed.js  – June 2025
     ------------------------------------------------------------
-    ▸ Fetches hospital-network-tabs.html from the same folder
-      (or edit the src line if you store it elsewhere).
-    ▸ Injects the markup into <div id="hospital-network-container">.
-    ▸ Re-wires all tab buttons so they keep working after injection.
+    ▸ Place this file next to hospitals.html in your GitHub repo.
+    ▸ Embed in Webflow:
+         <div id="hospital-network-container"></div>
+         <script src="https://cdn.jsdelivr.net/gh/ahmedhadrich/PCIL_Scripts@main/hospitalListEmbed.js" defer></script>
 */
 
 (function () {
-  /*** 1. Config ***/
+  /* ---------- config ---------- */
   const containerId = 'hospital-network-container';
-
-  /* If the HTML file sits next to this JS on jsDelivr (recommended) */
   const htmlSrc = new URL('hospitals.html', document.currentScript.src).href;
 
-  /*** 2. Find (or create) the container ***/
+  /* ---------- container ---------- */
   let host = document.getElementById(containerId);
   if (!host) {
     host = document.createElement('div');
@@ -21,42 +19,55 @@
     document.currentScript.before(host);
   }
 
-  /*** 3. Fetch + inject ***/
+  /* ---------- fetch + inject ---------- */
   fetch(htmlSrc)
     .then(r => r.text())
     .then(html => {
       host.innerHTML = html;
 
-      /* 4. If the fetched fragment already contained <style> and <script>
-            tags they were NOT executed—so we need to:
-            – move any <style> blocks to <head>
-            – run any inline scripts manually.
-       ----------------------------------------------------------------- */
+      /* 1. Move any <style> blocks to <head> so CSS applies */
       host.querySelectorAll('style').forEach(sty => {
         document.head.appendChild(sty.cloneNode(true));
         sty.remove();
       });
 
+      /* 2. Run inline <script> tags (tabs logic) */
       host.querySelectorAll('script').forEach(scr => {
         try { new Function(scr.textContent)(); } catch (e) { console.error(e); }
         scr.remove();
       });
 
-      /* 5. (Re)-wire tab clicks (defensive in case inline JS didn’t exist) */
+      /* 3. Fix legacy typo herf= on map links, if any */
+      host.querySelectorAll('a[herf]').forEach(a => {
+        a.setAttribute('href', a.getAttribute('herf'));
+        a.removeAttribute('herf');
+      });
+
+      /* 4. Safety-net tab wiring (if inline JS was blocked) */
       const tabs = host.querySelectorAll('.hospital-tab');
       const regions = host.querySelectorAll('.region');
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          tabs.forEach(t => t.classList.toggle('active', t === tab));
-          regions.forEach(r => {
-            r.style.display = r.id === 'reg-' + tab.dataset.region ? '' : 'none';
+      if (tabs.length && regions.length) {
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.toggle('active', t === tab));
+            regions.forEach(r => {
+              r.style.display = r.id === 'reg-' + tab.dataset.region ? '' : 'none';
+            });
           });
         });
-      });
+      }
+
+      /* 5. Ensure Font Awesome loads for the red pin icon */
+      if (!document.getElementById('fa-hospital-network')) {
+        const fa = document.createElement('link');
+        fa.id = 'fa-hospital-network';
+        fa.rel = 'stylesheet';
+        fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css';
+        document.head.appendChild(fa);
+      }
     })
     .catch(err => {
-      console.error('hospitalNetworkEmbed:', err);
-      host.innerHTML =
-        '<p style="color:red">Unable to load hospital list. Please try again later.</p>';
+      console.error('hospitalListEmbed:', err);
+      host.innerHTML = '<p style="color:red">Unable to load hospital list. Please try again later.</p>';
     });
 })();
