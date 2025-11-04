@@ -4483,25 +4483,26 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        // Execute immediately (don't wait for DOMContentLoaded - it may have already fired when embedded)
+        (function() {
             const tabs = document.querySelectorAll('.hospital-tab');
             const regions = document.querySelectorAll('.region');
 
             tabs.forEach(tab => {
                 tab.addEventListener('click', function() {
                     const targetRegion = this.getAttribute('data-region');
-                    
+
                     // Remove active class from all tabs
                     tabs.forEach(t => t.classList.remove('active'));
-                    
+
                     // Add active class to clicked tab
                     this.classList.add('active');
-                    
+
                     // Hide all regions
                     regions.forEach(region => {
                         region.classList.remove('active');
                     });
-                    
+
                     // Show target region
                     const targetElement = document.getElementById('reg-' + targetRegion);
                     if (targetElement) {
@@ -4509,7 +4510,7 @@
                     }
                 });
             });
-        });
+        })();
     </script>
 </body>
 </html>
