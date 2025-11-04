@@ -49,9 +49,11 @@
       if (tabs.length && regions.length) {
         tabs.forEach(tab => {
           tab.addEventListener('click', () => {
+            // Update active tab
             tabs.forEach(t => t.classList.toggle('active', t === tab));
+            // Update active region using class instead of inline style
             regions.forEach(r => {
-              r.style.display = r.id === 'reg-' + tab.dataset.region ? '' : 'none';
+              r.classList.toggle('active', r.id === 'reg-' + tab.dataset.region);
             });
           });
         });
